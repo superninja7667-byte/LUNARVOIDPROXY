@@ -85,16 +85,16 @@ jobs:
               m = re.search(r"(\w+)\.setWebViewClient\(", code)
               webview_name = m.group(1) if m else None
               if not webview_name:
-                  m = re.search(r"WebView\s+(\w+)\s*=", code)
+                  m = re.search(r"WebView\s+(\w+)\s*(?:=|;)", code)
                   if not m:
-                      raise SystemExit("Could not locate WebView initialization to attach file chooser")
+                      raise SystemExit("Could not locate a WebView variable to attach the file chooser")
                   webview_name = m.group(1)
-              load = re.search(re.escape(webview_name) + r"\.loadUrl\([^;]*;", code)
+              load = re.search(re.escape(webview_name) + r"\.(?:loadUrl|loadDataWithBaseURL)\([^;]*;", code)
               if load:
                   insertion = load.end()
                   code = code[:insertion] + "\n        configureLunarVoidFileChooser(" + webview_name + ");" + code[insertion:]
               else:
-                  raise SystemExit("Could not find the WebView loadUrl statement to attach the file chooser")
+                  raise SystemExit("Could not find the WebView page-load statement to attach the file chooser")
           if "LUNARVOID_FILE_CHOOSER_REQUEST && lunarVoidFileCallback" not in code:
               callback = '''
               if (requestCode == LUNARVOID_FILE_CHOOSER_REQUEST && lunarVoidFileCallback != null) {
