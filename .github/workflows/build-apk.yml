@@ -55,7 +55,7 @@ jobs:
             go get golang.org/x/mobile/bind
             gomobile init
             mkdir -p ../app/libs
-            gomobile bind -target=android/arm64 -androidapi 26 -ldflags="-s -w" -o ../app/libs/engine.aar .
+            gomobile bind -target=android/arm64 -androidapi 26 -ldflags="-s -w -checklinkname=0" -o ../app/libs/engine.aar .
           else
             echo "No Go engine found; skipping gomobile build."
           fi
