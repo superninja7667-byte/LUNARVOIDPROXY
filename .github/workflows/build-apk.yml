@@ -25,6 +25,21 @@ jobs:
           mkdir -p src
           unzip -q -o lunarvoid-src.zip -d src
           find src -maxdepth 4 -type f | sort | head -200
+          test -f LunarVoid_MenuPreview_v4.html
+          test -f src/app/src/main/assets/index.html
+          cp LunarVoid_MenuPreview_v4.html src/app/src/main/assets/index.html
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          manifest = Path("src/app/src/main/AndroidManifest.xml")
+          text = manifest.read_text()
+          text, count = re.subn(r'android:label="[^"]*"', 'android:label="LunarVoidProxy"', text, count=1)
+          if count == 0:
+              text = text.replace("<application", '<application android:label="LunarVoidProxy"', 1)
+          manifest.write_text(text)
+          PY
+          echo "Bundled LunarVoid_MenuPreview_v4.html as the app's index.html."
+          grep -n 'android:label' src/app/src/main/AndroidManifest.xml
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -67,10 +82,13 @@ jobs:
           arguments: ':app:assembleDebug --no-daemon'
           build-root-directory: src
 
+      - name: Name APK LunarVoidProxy.apk
+        run: cp src/app/build/outputs/apk/debug/app-debug.apk src/app/build/outputs/apk/debug/LunarVoidProxy.apk
+
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: LunarVoidProxy-APK
-          path: src/app/build/outputs/apk/debug/app-debug.apk
+          name: LunarVoidProxy
+          path: src/app/build/outputs/apk/debug/LunarVoidProxy.apk
           if-no-files-found: error
