@@ -7,6 +7,7 @@ on:
     paths:
       - 'lunarvoid-src.zip'
       - 'lunarvoid-src (1).zip'
+      - '.github/workflows/lunarvoid-src (2).zip'
       - 'LunarVoid_MenuPreview_v4.html'
       - '.github/workflows/build-apk.yml'
 
@@ -23,7 +24,7 @@ jobs:
       - name: Inspect and unpack Android source
         run: |
           SOURCE_ZIP=''
-          if [ -f 'lunarvoid-src (1).zip' ]; then SOURCE_ZIP='lunarvoid-src (1).zip'; elif [ -f 'lunarvoid-src.zip' ]; then SOURCE_ZIP='lunarvoid-src.zip'; else echo 'No lunarvoid source ZIP found'; exit 1; fi
+          if [ -f '.github/workflows/lunarvoid-src (2).zip' ]; then SOURCE_ZIP='.github/workflows/lunarvoid-src (2).zip'; elif [ -f 'lunarvoid-src (1).zip' ]; then SOURCE_ZIP='lunarvoid-src (1).zip'; elif [ -f 'lunarvoid-src.zip' ]; then SOURCE_ZIP='lunarvoid-src.zip'; else echo 'No lunarvoid source ZIP found'; exit 1; fi
           echo "Building from: $SOURCE_ZIP"
           unzip -l "$SOURCE_ZIP"
           mkdir -p src
