@@ -34,6 +34,9 @@ jobs:
               raise SystemExit("MainActivity.java not found; cannot wire the Android file chooser")
           p = files[0]
           code = p.read_text()
+          package = re.search(r"^package [^;]+;", code, re.M)
+          if not package:
+              raise SystemExit("Could not find package declaration in MainActivity.java")
           imports = [
               "import android.app.Activity;",
               "import android.content.Intent;",
@@ -41,41 +44,88 @@ jobs:
               "import android.webkit.ValueCallback;",
               "import android.webkit.WebChromeClient;",
               "import android.webkit.WebView;",
-              "import android.webkit.WebChromeClient.FileChooserParams;",
           ]
-          package = re.search(r"^package [^;]+;", code, re.M)
-          if not package:
-              raise SystemExit("Could not find package declaration in MainActivity.java")
           for item in imports:
               if item not in code:
-                  code = code[:package.end()] + "\\n" + item + code[package.end():]
                   package = re.search(r"^package [^;]+;", code, re.M)
+                  code = code[:package.end()] + "\n" + item + code[package.end():]
           if "private ValueCallback<Uri[]> lunarVoidFileCallback" not in code:
-              class_decl = re.search(r"class MainActivity[^\\{]*\\{", code)
+              class_decl = re.search(r"class MainActivity[^{]*{", code)
               if not class_decl:
                   raise SystemExit("Could not find MainActivity class declaration")
-              methods = '''\n    private static final int LUNARVOID_FILE_CHOOSER_REQUEST = 4817;\n    private ValueCallback<Uri[]> lunarVoidFileCallback;\n\n    private void configureLunarVoidFileChooser(WebView target) {\n        target.setWebChromeClient(new WebChromeClient() {\n            @Override\n            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> callback, FileChooserParams params) {\n                if (lunarVoidFileCallback != null) lunarVoidFileCallback.onReceiveValue(null);\n                lunarVoidFileCallback = callback;\n                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);\n                intent.addCategory(Intent.CATEGORY_OPENABLE);\n                intent.setType("*/*");\n                String[] accept = params.getAcceptTypes();\n                if (accept != null && accept.length > 0) intent.putExtra(Intent.EXTRA_MIME_TYPES, accept);\n                try { startActivityForResult(Intent.createChooser(intent, "Select a skin or resource pack"), LUNARVOID_FILE_CHOOSER_REQUEST); }\n                catch (Exception error) { lunarVoidFileCallback = null; callback.onReceiveValue(null); return false; }\n                return true;\n            }\n        });\n    }\n\n    @Override\n    protected void onActivityResult(int requestCode, int resultCode, Intent data) {\n        super.onActivityResult(requestCode, resultCode, data);\n        if (requestCode == LUNARVOID_FILE_CHOOSER_REQUEST && lunarVoidFileCallback != null) {\n            Uri[] result = resultCode == Activity.RESULT_OK && data != null && data.getData() != null\n                ? new Uri[] { data.getData() } : null;\n            lunarVoidFileCallback.onReceiveValue(result);\n            lunarVoidFileCallback = null;\n        }\n    }\n'''
+              methods = '''
+              private static final int LUNARVOID_FILE_CHOOSER_REQUEST = 4817;
+              private ValueCallback<Uri[]> lunarVoidFileCallback;
+
+              private void configureLunarVoidFileChooser(WebView target) {
+                  target.setWebChromeClient(new WebChromeClient() {
+                      @Override
+                      public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                          if (lunarVoidFileCallback != null) lunarVoidFileCallback.onReceiveValue(null);
+                          lunarVoidFileCallback = callback;
+                          Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                          intent.addCategory(Intent.CATEGORY_OPENABLE);
+                          intent.setType("*/*");
+                          String[] accept = params.getAcceptTypes();
+                          if (accept != null && accept.length > 0) intent.putExtra(Intent.EXTRA_MIME_TYPES, accept);
+                          try {
+                              startActivityForResult(Intent.createChooser(intent, "Select a skin or resource pack"), LUNARVOID_FILE_CHOOSER_REQUEST);
+                          } catch (Exception error) {
+                              lunarVoidFileCallback = null;
+                              callback.onReceiveValue(null);
+                              return false;
+                          }
+                          return true;
+                      }
+                  });
+              }
+              '''
               code = code[:class_decl.end()] + methods + code[class_decl.end():]
-          if "configureLunarVoidFileChooser(" not in code[code.find("private void configureLunarVoidFileChooser"):]:
-              raise SystemExit("File chooser helper insertion failed")
-          if "configureLunarVoidFileChooser(" not in code[code.find("private void configureLunarVoidFileChooser") + 1:]:
-              # Find the WebView variable from common initialization patterns and wire it once.
-              patterns = [r"(\\w+)\\.setWebViewClient\\("]
-              found = None
-              for pattern in patterns:
-                  m = re.search(pattern, code)
-                  if m:
-                      found = m.group(1); pos = m.end(); break
-              if not found:
-                  # Fallback for projects using a variable named webView and no explicit client call.
-                  if re.search(r"WebView\\s+webView\\s*=", code):
-                      m = re.search(r"WebView\\s+webView\\s*=.*?;", code, re.S)
-                      found, pos = "webView", m.end()
-                  else:
+          if "configureLunarVoidFileChooser(webView);" not in code and "configureLunarVoidFileChooser(mWebView);" not in code:
+              m = re.search(r"(\w+)\.setWebViewClient\(", code)
+              if m:
+                  webview_name = m.group(1)
+                  insertion = code.find(";", m.end())
+                  if insertion < 0:
+                      raise SystemExit("Could not find end of setWebViewClient call")
+                  insertion += 1
+                  code = code[:insertion] + "\n        configureLunarVoidFileChooser(" + webview_name + ");" + code[insertion:]
+              else:
+                  m = re.search(r"WebView\s+(m?webView)\s*=", code)
+                  if not m:
                       raise SystemExit("Could not locate WebView initialization to attach file chooser")
-              code = code[:pos] + "\\n        configureLunarVoidFileChooser(" + found + ");" + code[pos:]
+                  webview_name = m.group(1)
+                  insertion = code.find(";", m.end())
+                  code = code[:insertion + 1] + "\n        configureLunarVoidFileChooser(" + webview_name + ");" + code[insertion + 1:]
+          if "LUNARVOID_FILE_CHOOSER_REQUEST && lunarVoidFileCallback" not in code:
+              callback = '''
+              if (requestCode == LUNARVOID_FILE_CHOOSER_REQUEST && lunarVoidFileCallback != null) {
+                  Uri[] result = resultCode == Activity.RESULT_OK && data != null && data.getData() != null
+                      ? new Uri[] { data.getData() } : null;
+                  lunarVoidFileCallback.onReceiveValue(result);
+                  lunarVoidFileCallback = null;
+              }
+              '''
+              existing = re.search(r"protected void onActivityResult\s*\([^)]*\)\s*\{", code)
+              if existing:
+                  depth = 1
+                  i = existing.end()
+                  while i < len(code) and depth:
+                      if code[i] == "{": depth += 1
+                      elif code[i] == "}": depth -= 1
+                      i += 1
+                  code = code[:i - 1] + callback + code[i - 1:]
+              else:
+                  class_decl = re.search(r"class MainActivity[^{]*{", code)
+                  code = code[:class_decl.end()] + '''
+              @Override
+              protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+                  super.onActivityResult(requestCode, resultCode, data);
+              ''' + callback + '''
+              }
+              ''' + code[class_decl.end():]
           p.write_text(code)
-          print("Enabled native Android file selection in", p)
+          print("Enabled Android file chooser in", p)
           PY
           test -f LunarVoid_MenuPreview_v4.html
           test -f src/app/src/main/assets/index.html
