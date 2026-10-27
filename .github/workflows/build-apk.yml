@@ -1,0 +1,76 @@
+name: Build LunarVoid APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'lunarvoid-src.zip'
+      - 'LunarVoid_MenuPreview_v4.html'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Inspect and unpack Android source
+        run: |
+          unzip -l lunarvoid-src.zip
+          mkdir -p src
+          unzip -q -o lunarvoid-src.zip -d src
+          find src -maxdepth 4 -type f | sort | head -200
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Install Android SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Build Go engine for Android (if present)
+        shell: bash
+        run: |
+          if [ -d src/engine ] && [ -f src/engine/go.mod ]; then
+            export PATH="$PATH:$(go env GOPATH)/bin"
+            export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$ANDROID_NDK_LATEST_HOME}"
+            cd src/engine
+            go mod tidy
+            go install golang.org/x/mobile/cmd/gomobile@latest
+            go get golang.org/x/mobile/bind
+            gomobile init
+            mkdir -p ../app/libs
+            gomobile bind -target=android/arm64 -androidapi 26 -ldflags="-s -w" -o ../app/libs/engine.aar .
+          else
+            echo "No Go engine found; skipping gomobile build."
+          fi
+
+      - name: Build Android APK
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: '8.9'
+          arguments: ':app:assembleDebug --no-daemon'
+          build-root-directory: src
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LunarVoidProxy-APK
+          path: src/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
