@@ -85,7 +85,7 @@ jobs:
               m = re.search(r"(\w+)\.setWebViewClient\(", code)
               webview_name = m.group(1) if m else None
               if not webview_name:
-                  m = re.search(r"WebView\s+(m?webView)\s*=", code)
+                  m = re.search(r"WebView\s+(\w+)\s*=", code)
                   if not m:
                       raise SystemExit("Could not locate WebView initialization to attach file chooser")
                   webview_name = m.group(1)
