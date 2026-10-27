@@ -40,7 +40,7 @@ jobs:
           go get golang.org/x/mobile/bind
           gomobile init
           mkdir -p ../app/libs
-          gomobile bind -target=android/arm64 -androidapi 26 -ldflags="-s -w" -o ../app/libs/engine.aar .
+          gomobile bind -target=android/arm64 -androidapi 26 -ldflags="-checklinkname=0 -s -w" -o ../app/libs/engine.aar .
 
       - uses: gradle/actions/setup-gradle@v4
         with:
